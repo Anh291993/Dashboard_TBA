@@ -1112,15 +1112,9 @@ td.mono { font-family: var(--font-mono); font-size: 12px; }
       </div>
       <div class="filter-group">
         <label>📦 Loại thiết bị</label>
+        <!-- Được build động từ cột tram_id (dữ liệu ẩn) trong buildFilterOptions() -->
         <select id="f-loai">
           <option value="">— Tất cả —</option>
-          <option value="Máy biến áp">Máy biến áp</option>
-          <option value="Máy cắt">Máy cắt</option>
-          <option value="Dao cách ly">Dao cách ly</option>
-          <option value="Máy biến dòng">Máy biến dòng (TI)</option>
-          <option value="Máy biến áp đo lường">MBAÐL (TU)</option>
-          <option value="Chống sét van">Chống sét van</option>
-          <option value="Tủ">Tủ</option>
         </select>
       </div>
       <div class="filter-group">
@@ -1437,6 +1431,25 @@ function buildFilterOptions(data) {
     years.map(y => `<option value="${y}">≥ ${y}</option>`).join('');
   yTo.innerHTML = '<option value="">— Tất cả —</option>' +
     years.map(y => `<option value="${y}">≤ ${y}</option>`).join('');
+
+  // ── Loại thiết bị — build từ cột tram_id (ẩn trong bảng) ──────
+  // tram_id chứa phân loại thiết bị, VD: "Máy biến áp", "Máy cắt"...
+  // Dữ liệu được fetch theo select('*') nhưng KHÔNG hiển thị trong bảng
+  const loaiSel = document.getElementById('f-loai');
+  const loaiValues = [...new Set(
+    data.map(r => (r.tram_id || '').trim()).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'vi'));
+
+  if (loaiValues.length > 0) {
+    // Giữ lại option đang chọn (nếu có) khi refresh data
+    const currentVal = loaiSel.value;
+    loaiSel.innerHTML = '<option value="">— Tất cả —</option>' +
+      loaiValues.map(v => `<option value="${escHtml(v)}">${escHtml(v)}</option>`).join('');
+    // Khôi phục lựa chọn cũ nếu vẫn còn trong list
+    if (currentVal && loaiValues.includes(currentVal)) {
+      loaiSel.value = currentVal;
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1479,8 +1492,8 @@ function applyFilters() {
     if (cap  && String(r.cap_dien_ap) !== cap) return false;
     // Hãng sản xuất (exact match)
     if (hang && r.hang_san_xuat !== hang) return false;
-    // Loại thiết bị (contains match)
-    if (loai && !(r.ten_thiet_bi||'').toLowerCase().includes(loai.toLowerCase())) return false;
+    // Loại thiết bị — exact match theo cột tram_id (ẩn, không hiện trong bảng)
+    if (loai && (r.tram_id || '').trim() !== loai) return false;
     // Năm SX từ (≥)
     if (nFrom !== null && (r.nam_san_xuat === null || r.nam_san_xuat < nFrom)) return false;
     // Năm SX đến (≤)
