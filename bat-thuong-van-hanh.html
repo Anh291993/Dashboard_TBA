@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bất thường vận hành – TBA 110kV</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Barlow:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0a0e17;--bg2:#111827;--bg3:#1a2235;--border:#1e3a5f;
+  --accent:#00d4ff;--green:#10b981;--amber:#f59e0b;
+  --danger:#ef4444;--purple:#8b5cf6;--pink:#ec4899;
+  --text:#e2e8f0;--muted:#64748b;
+  --mono:'IBM Plex Mono',monospace;--ui:'Barlow',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:var(--ui);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:9999;}
+
+/* CONFIG OVERLAY */
+#cfg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:500;backdrop-filter:blur(8px);}
+.cfg-box{background:var(--bg2);border:1px solid var(--danger);border-radius:12px;padding:38px;width:500px;box-shadow:0 0 60px rgba(239,68,68,.2);}
+.cfg-box h2{font-family:var(--mono);color:var(--danger);font-size:13px;letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;}
+.cfg-box p{color:var(--muted);font-size:12px;margin-bottom:22px;line-height:1.6;}
+.cfg-box label{display:block;font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;}
+.cfg-box input{width:100%;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;margin-bottom:14px;outline:none;transition:border .2s;}
+.cfg-box input:focus{border-color:var(--danger);}
+.cfg-hint{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:10px 14px;font-size:11px;color:var(--danger);font-family:var(--mono);margin-bottom:18px;line-height:1.7;}
+.btn-conn{width:100%;padding:12px;background:var(--danger);color:#fff;font-weight:700;font-size:13px;border:none;border-radius:6px;cursor:pointer;letter-spacing:.05em;transition:opacity .2s;}
+.btn-conn:hover{opacity:.85;}
+#cfg-err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:10px 14px;font-size:11px;font-family:var(--mono);color:var(--danger);margin-bottom:12px;display:none;}
+.sql-accordion{margin-top:18px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.sql-accordion summary{padding:10px 14px;font-size:11px;color:var(--muted);font-family:var(--mono);cursor:pointer;list-style:none;}
+.sql-accordion summary::before{content:'▶  ';}
+details[open] .sql-accordion summary::before{content:'▼  ';}
+.sql-accordion pre{padding:14px;font-size:10px;color:var(--accent);font-family:var(--mono);line-height:1.6;overflow-x:auto;white-space:pre-wrap;border-top:1px solid var(--border);}
+
+/* HEADER */
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 28px;height:52px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:14px;}
+.back-btn{background:transparent;border:1px solid var(--border);color:var(--muted);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-family:var(--mono);text-decoration:none;transition:all .2s;}
+.back-btn:hover{border-color:var(--accent);color:var(--accent);}
+.in-iframe .back-btn{display:none;}
+.page-title{font-weight:700;font-size:15px;}
+.page-title span{color:var(--danger);}
+.h-stats{display:flex;gap:14px;align-items:center;margin-left:auto;}
+.h-stat{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;}
+.h-stat strong{font-size:15px;font-weight:700;}
+.h-stat.c strong{color:var(--danger);}
+.h-stat.d strong{color:var(--green);}
+.h-stat.t strong{color:var(--accent);}
+#conn-status{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--muted);}
+.dlive{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;}
+.doff{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.btn-cfg2{background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-family:var(--mono);transition:all .2s;}
+.btn-cfg2:hover{border-color:var(--accent);color:var(--accent);}
+
+/* MAIN */
+main{padding:20px 28px;max-width:1600px;margin:0 auto;}
+
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;cursor:pointer;transition:border-color .2s,transform .15s;}
+.kpi:hover{border-color:var(--accent);transform:translateY(-2px);}
+.kpi.active{border-color:var(--accent);background:rgba(0,212,255,.06);}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.kpi.k1::before{background:var(--accent);}
+.kpi.k2::before{background:var(--amber);}
+.kpi.k3::before{background:var(--purple);}
+.kpi.k4::before{background:var(--green);}
+.kpi.k5::before{background:var(--pink);}
+.kpi.k6::before{background:var(--danger);}
+.kpi-lbl{font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
+.kpi-val{font-size:26px;font-weight:700;font-family:var(--mono);line-height:1;}
+.kpi.k1 .kpi-val{color:var(--accent);}
+.kpi.k2 .kpi-val{color:var(--amber);}
+.kpi.k3 .kpi-val{color:var(--purple);}
+.kpi.k4 .kpi-val{color:var(--green);}
+.kpi.k5 .kpi-val{color:var(--pink);}
+.kpi.k6 .kpi-val{color:var(--danger);}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:3px;}
+
+/* FILTER */
+.fbar{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 18px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:9px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;}
+.fg select,.fg input{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;outline:none;font-family:var(--ui);transition:border .2s;min-width:120px;}
+.fg select:focus,.fg input:focus{border-color:var(--danger);}
+.fg input{min-width:190px;}
+.btn-lc{background:var(--danger);color:#fff;border:none;padding:7px 16px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;transition:opacity .2s;}
+.btn-lc:hover{opacity:.85;}
+.btn-xoa{background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;transition:all .2s;}
+.btn-xoa:hover{border-color:var(--danger);color:var(--danger);}
+.rcnt{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted);align-self:center;}
+.rcnt span{color:var(--accent);font-weight:700;}
+
+/* TABLE */
+.tcard{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.thd{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.thd-title{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;}
+.thd-title::before{content:'▶ ';color:var(--danger);}
+.btn-csv{margin-left:auto;background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-family:var(--mono);transition:all .2s;}
+.btn-csv:hover{border-color:var(--green);color:var(--green);}
+.tscroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{background:var(--bg3);padding:8px 10px;text-align:left;font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;}
+thead th:hover{color:var(--accent);}
+thead th.sorted{color:var(--danger);}
+tbody tr{border-bottom:1px solid rgba(30,58,95,.4);transition:background .12s;cursor:pointer;}
+tbody tr:hover{background:rgba(239,68,68,.04);}
+tbody tr:last-child{border-bottom:none;}
+td{padding:9px 10px;vertical-align:top;max-width:240px;}
+td.mn{font-family:var(--mono);font-size:11px;}
+.cclamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--muted);font-size:11px;line-height:1.5;}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-family:var(--mono);font-weight:600;white-space:nowrap;}
+.b1{background:rgba(0,212,255,.12);color:var(--accent);}
+.b2{background:rgba(245,158,11,.12);color:var(--amber);}
+.b3{background:rgba(139,92,246,.12);color:var(--purple);}
+.b4{background:rgba(16,185,129,.12);color:var(--green);}
+.b5{background:rgba(236,72,153,.12);color:var(--pink);}
+.bx{background:rgba(100,116,139,.12);color:var(--muted);}
+.tc{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:10px;font-family:var(--mono);font-weight:600;}
+.tc.chua{background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.25);}
+.tc.da  {background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.25);}
+.tc.chua::before{content:'●';font-size:7px;animation:pulse 1.5s infinite;}
+.tc.da::before{content:'✓';}
+.tcell{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;}
+.tcell .dt{color:var(--text);font-size:11px;font-weight:600;}
+.tcell .df{color:var(--amber);font-size:9px;margin-top:2px;}
+
+/* MODAL */
+#mbg{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:400;backdrop-filter:blur(6px);}
+#mbg.open{display:flex;}
+.modal{background:var(--bg2);border-radius:14px;width:700px;max-height:85vh;overflow-y:auto;box-shadow:0 0 80px rgba(239,68,68,.15);border:1px solid var(--border);}
+.mhd{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px;position:sticky;top:0;background:var(--bg2);z-index:1;}
+.mhd-icon{width:38px;height:38px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;}
+.mhd-icon.c{background:rgba(239,68,68,.15);}
+.mhd-icon.d{background:rgba(16,185,129,.15);}
+.mhd-info{flex:1;}
+.mhd-info h3{font-size:14px;font-weight:700;margin-bottom:4px;line-height:1.3;}
+.mhd-info .mmeta{display:flex;gap:8px;flex-wrap:wrap;}
+.mclose{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:19px;padding:2px;transition:color .2s;line-height:1;}
+.mclose:hover{color:var(--danger);}
+.mbody{padding:22px 24px;}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+.mf label{display:block;font-size:9px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;}
+.mf value{display:block;font-size:13px;font-weight:600;font-family:var(--mono);}
+.mf.full{grid-column:1/-1;}
+.mtext{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:11px;color:var(--muted);line-height:1.8;white-space:pre-wrap;max-height:150px;overflow-y:auto;margin-top:4px;}
+.msep{height:1px;background:var(--border);margin:14px 0;}
+.mnav{display:flex;gap:8px;justify-content:flex-end;padding:10px 24px;border-top:1px solid var(--border);}
+.mnbtn{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:11px;font-family:var(--mono);transition:all .2s;}
+.mnbtn:hover{border-color:var(--accent);color:var(--accent);}
+.mnbtn:disabled{opacity:.3;cursor:not-allowed;}
+
+/* PAGINATION */
+.pag{padding:10px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.pag button{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-family:var(--mono);transition:all .2s;min-width:30px;}
+.pag button:hover{border-color:var(--accent);color:var(--accent);}
+.pag button.active{background:var(--danger);color:#fff;border-color:var(--danger);font-weight:700;}
+.pag button:disabled{opacity:.3;cursor:not-allowed;}
+.pg-inf{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--muted);}
+
+/* STATES */
+.lstate,.estate{text-align:center;padding:60px;color:var(--muted);font-family:var(--mono);font-size:12px;}
+.spin{width:30px;height:30px;border:2px solid var(--border);border-top-color:var(--danger);border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 14px;}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ei{font-size:38px;margin-bottom:12px;}
+
+@media(max-width:900px){main{padding:14px;}.kpi-grid{grid-template-columns:repeat(3,1fr);}.modal{width:95vw;}}
+</style>
+</head>
+<body>
+
+<div id="mbg" onclick="closeMod(event)">
+  <div class="modal">
+    <div class="mhd">
+      <div class="mhd-icon" id="mi">⚠</div>
+      <div class="mhd-info">
+        <h3 id="mt">—</h3>
+        <div class="mmeta" id="mm"></div>
+      </div>
+      <button class="mclose" onclick="closeMod()">✕</button>
+    </div>
+    <div class="mbody" id="mb"></div>
+    <div class="mnav">
+      <button class="mnbtn" id="mprev" onclick="navMod(-1)">◀ Trước</button>
+      <button class="mnbtn" id="mnext" onclick="navMod(1)">Tiếp ▶</button>
+    </div>
+  </div>
+</div>
+
+<div id="cfg-overlay">
+  <div class="cfg-box">
+    <h2>⚠ Kết nối Supabase — Bất thường vận hành</h2>
+    <p>Nhập thông tin Supabase để tải dữ liệu bảng <strong style="color:var(--danger)">bat_thuong</strong>.<br>
+       Nếu đang mở từ Dashboard TBA, hệ thống sẽ tự kết nối.</p>
+    <div class="cfg-hint">📍 Supabase → Settings → API<br>
+      URL: <strong>https://xxxx.supabase.co</strong> &nbsp;|&nbsp; Key: <strong>anon / public</strong>
+    </div>
+    <div id="cfg-err"></div>
+    <label>Project URL</label>
+    <input id="iurl" type="text" placeholder="https://abcdefghij.supabase.co" spellcheck="false"/>
+    <label>Anon Key (public)</label>
+    <input id="ikey" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." spellcheck="false"/>
+    <button class="btn-conn" onclick="doConnect()">🔌 Kết nối & Tải dữ liệu</button>
+    <details class="sql-accordion">
+      <summary>📋 SQL tạo bảng bat_thuong trong Supabase (bấm để xem)</summary>
+      <pre>-- Chạy trong Supabase → SQL Editor
+CREATE TABLE IF NOT EXISTS bat_thuong (
+  id             BIGSERIAL PRIMARY KEY,
+  stt            INTEGER,
+  phan_loai      TEXT,
+  tram           TEXT,
+  tb_cha         TEXT,
+  tb_con         TEXT,
+  dien_bien      TEXT,
+  tg_xuat_hien   TIMESTAMPTZ,
+  tg_khac_phuc   TIMESTAMPTZ,
+  nguyen_nhan    TEXT,
+  don_vi         TEXT,
+  trang_thai     TEXT DEFAULT 'Chưa khắc phục',
+  ghi_chu        TEXT,
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Bật RLS
+ALTER TABLE bat_thuong ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "read_all"   ON bat_thuong FOR SELECT USING (true);
+CREATE POLICY "insert_all" ON bat_thuong FOR INSERT WITH CHECK (true);
+CREATE POLICY "update_all" ON bat_thuong FOR UPDATE USING (true);
+
+-- Index
+CREATE INDEX IF NOT EXISTS idx_bt_tram      ON bat_thuong(tram);
+CREATE INDEX IF NOT EXISTS idx_bt_trangThai ON bat_thuong(trang_thai);
+CREATE INDEX IF NOT EXISTS idx_bt_tg        ON bat_thuong(tg_xuat_hien DESC);</pre>
+    </details>
+  </div>
+</div>
+
+<header>
+  <a class="back-btn" href="tba-dashboard.html">← Dashboard</a>
+  <div class="page-title">⚠ Bất thường <span>vận hành</span> TBA 110kV</div>
+  <div class="h-stats">
+    <div class="h-stat t">Tổng: <strong id="ht">—</strong></div>
+    <div class="h-stat c">Chưa KP: <strong id="hc">—</strong></div>
+    <div class="h-stat d">Đã KP: <strong id="hd">—</strong></div>
+  </div>
+  <div id="conn-status"><div class="doff" id="cdot"></div><span id="ctxt">Chưa kết nối</span></div>
+  <button class="btn-cfg2" onclick="showCfg()">⚙ Cấu hình</button>
+</header>
+
+<main>
+  <div class="kpi-grid">
+    <div class="kpi k1" onclick="filterPL('SCADA/HMI')" id="kpi0"><div class="kpi-lbl">SCADA/HMI</div><div class="kpi-val" id="kv0">—</div><div class="kpi-sub">sự cố</div></div>
+    <div class="kpi k2" onclick="filterPL('Nhất thứ')"  id="kpi1"><div class="kpi-lbl">Nhất thứ</div><div class="kpi-val" id="kv1">—</div><div class="kpi-sub">sự cố</div></div>
+    <div class="kpi k3" onclick="filterPL('Nhị thứ')"   id="kpi2"><div class="kpi-lbl">Nhị thứ</div><div class="kpi-val" id="kv2">—</div><div class="kpi-sub">sự cố</div></div>
+    <div class="kpi k4" onclick="filterPL('Đường dây')" id="kpi3"><div class="kpi-lbl">Đường dây</div><div class="kpi-val" id="kv3">—</div><div class="kpi-sub">sự cố</div></div>
+    <div class="kpi k5" onclick="filterPL('Kênh truyền')" id="kpi4"><div class="kpi-lbl">Kênh truyền</div><div class="kpi-val" id="kv4">—</div><div class="kpi-sub">sự cố</div></div>
+    <div class="kpi k6" onclick="filterPL('Chưa khắc phục','ts')" id="kpi5"><div class="kpi-lbl">Chưa KP</div><div class="kpi-val" id="kv5">—</div><div class="kpi-sub">cần xử lý</div></div>
+  </div>
+
+  <div class="fbar">
+    <div class="fg"><label>Phân loại</label>
+      <select id="fpl"><option value="">— Tất cả —</option><option>SCADA/HMI</option><option>Nhất thứ</option><option>Nhị thứ</option><option>Đường dây</option><option>Kênh truyền</option><option>Một chiều</option></select>
+    </div>
+    <div class="fg"><label>Trạng thái</label>
+      <select id="fts"><option value="">— Tất cả —</option><option value="Chưa khắc phục">⚠ Chưa khắc phục</option><option value="Đã khắc phục">✓ Đã khắc phục</option></select>
+    </div>
+    <div class="fg"><label>Đơn vị xử lý</label><select id="fdv"><option value="">— Tất cả —</option></select></div>
+    <div class="fg"><label>Tìm kiếm</label><input id="fs" type="text" placeholder="Trạm, thiết bị, diễn biến..."/></div>
+    <button class="btn-lc" onclick="applyF()">🔍 Lọc</button>
+    <button class="btn-xoa" onclick="resetF()">✕ Xóa</button>
+    <div class="rcnt">Hiển thị: <span id="rn">—</span> bản ghi</div>
+  </div>
+
+  <div class="tcard">
+    <div class="thd">
+      <div class="thd-title">Danh sách sự cố bất thường</div>
+      <button class="btn-csv" onclick="expCSV()">⬇ Xuất CSV</button>
+    </div>
+    <div class="tscroll">
+      <table>
+        <thead><tr>
+          <th onclick="srtBy('stt')" style="width:38px">STT</th>
+          <th onclick="srtBy('phan_loai')">Phân loại</th>
+          <th onclick="srtBy('tram')">Trạm</th>
+          <th onclick="srtBy('tb_cha')">Thiết bị</th>
+          <th style="min-width:180px">Diễn biến</th>
+          <th onclick="srtBy('tg_xuat_hien_sort')" style="white-space:nowrap">TG xuất hiện</th>
+          <th onclick="srtBy('tg_khac_phuc_sort')" style="white-space:nowrap">TG khắc phục</th>
+          <th onclick="srtBy('trang_thai')">Trạng thái</th>
+          <th onclick="srtBy('don_vi')">ĐV xử lý</th>
+        </tr></thead>
+        <tbody id="tbl">
+          <tr><td colspan="9"><div class="lstate"><div class="spin"></div>Đang chờ kết nối...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pag" id="pag"></div>
+  </div>
+</main>
+
+<script>
+let sb=null, RAW=[], FLT=[];
+let sc='tg_xuat_hien_sort', sa=false;
+let pg=1; const PS=25;
+let mi=-1;
+const PL_KEYS=['SCADA/HMI','Nhất thứ','Nhị thứ','Đường dây','Kênh truyền'];
+
+// ── CONNECT ────────────────────────────────────────────────────
+async function doConnect(u,k){
+  if(!u){u=(document.getElementById('iurl')||{}).value?.trim().replace(/\/$/,'');k=(document.getElementById('ikey')||{}).value?.trim();}
+  const e=document.getElementById('cfg-err');
+  if(e) e.style.display='none';
+  if(!u||!k){setErr('Vui lòng nhập URL và Anon Key!');return;}
+  if(!u.startsWith('https://')||!u.includes('.supabase')){setErr('URL phải dạng https://xxxx.supabase.co');return;}
+  try{
+    if(typeof supabase==='undefined') throw new Error('Supabase library chưa load');
+    sb=supabase.createClient(u,k,{auth:{persistSession:false}});
+    const {error}=await sb.from('bat_thuong').select('id').limit(1);
+    if(error){
+      if(error.message?.includes('does not exist')||error.code==='PGRST116')
+        throw new Error('Bảng "bat_thuong" chưa tồn tại. Hãy chạy SQL tạo bảng trong form bên trên.');
+      throw new Error(error.message||JSON.stringify(error));
+    }
+    localStorage.setItem('bt_url',u); localStorage.setItem('bt_key',k);
+    const ov=document.getElementById('cfg-overlay');
+    if(ov) ov.style.display='none';
+    setLive(true,u);
+    await loadData();
+  } catch(ex){setErr('Lỗi: '+(ex.message||ex));}
+}
+function setErr(m){const e=document.getElementById('cfg-err');if(e){e.textContent='❌ '+m;e.style.display='block';}}
+function setLive(on,u){
+  const d=document.getElementById('cdot'),t=document.getElementById('ctxt');
+  if(d) d.className=on?'dlive':'doff';
+  if(t) t.textContent=on?(u?u.split('//')[1].split('.')[0]:'OK'):'Chưa kết nối';
+}
+function showCfg(){const ov=document.getElementById('cfg-overlay');if(ov) ov.style.display='flex';}
+
+// ── LOAD DATA ─────────────────────────────────────────────────
+async function loadData(){
+  setTbl('<tr><td colspan="9"><div class="lstate"><div class="spin"></div>Đang tải...</div></td></tr>');
+  try{
+    let all=[],from=0,chunk;
+    do{
+      const{data,error}=await sb.from('bat_thuong').select('*').order('tg_xuat_hien',{ascending:false}).range(from,from+999);
+      if(error) throw error;
+      chunk=data||[]; all=all.concat(chunk); from+=1000;
+    } while(chunk.length===1000);
+
+    RAW=all.map(r=>({...r,
+      tg_xuat_hien_sort: r.tg_xuat_hien||'',
+      tg_khac_phuc_sort: r.tg_khac_phuc||'',
+      tg_xuat_hien: fmtDT(r.tg_xuat_hien),
+      tg_khac_phuc: fmtDT(r.tg_khac_phuc),
+    }));
+    buildKPI(); buildDV(); applyF(); pushParent();
+  } catch(ex){
+    setTbl(`<tr><td colspan="9"><div class="estate"><div class="ei">⚠️</div>${esc(ex.message||'Lỗi tải dữ liệu')}</div></td></tr>`);
+  }
+}
+function fmtDT(v){
+  if(!v) return '';
+  try{const d=new Date(v);if(isNaN(d)) return String(v);
+    return d.toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});}
+  catch{return String(v);}
+}
+function setTbl(h){const t=document.getElementById('tbl');if(t) t.innerHTML=h;}
+
+// Gửi data lên parent dashboard
+function pushParent(){
+  if(window.parent===window) return;
+  const today=new Date();
+  const ti=RAW.filter(r=>{if(!r.tg_xuat_hien_sort) return false;const d=new Date(r.tg_xuat_hien_sort);return d.toDateString()===today.toDateString();}).map(r=>({tram:r.tram||r.tb_cha||'',dien_bien:r.dien_bien||'',trang_thai:r.trang_thai||''}));
+  const ci=RAW.filter(r=>r.trang_thai==='Chưa khắc phục').map(r=>({tram:r.tram||r.tb_cha||'',dien_bien:r.dien_bien||''}));
+  window.parent.postMessage({type:'bt_data',total:RAW.length,chua:ci.length,today_items:ti.slice(0,15),chua_items:ci.slice(0,20)},'*');
+}
+
+// ── KPI & FILTER ───────────────────────────────────────────────
+function buildKPI(){
+  let chua=0,da=0; const cnts={};
+  RAW.forEach(r=>{(r.trang_thai==='Chưa khắc phục'?chua++:da++);const p=r.phan_loai||'';cnts[p]=(cnts[p]||0)+1;});
+  const ht=document.getElementById('ht'),hc=document.getElementById('hc'),hd=document.getElementById('hd');
+  if(ht) ht.textContent=RAW.length;
+  if(hc) hc.textContent=chua;
+  if(hd) hd.textContent=da;
+  PL_KEYS.forEach((pl,i)=>{const e=document.getElementById('kv'+i);if(e) e.textContent=cnts[pl]||0;});
+  const k5=document.getElementById('kv5');if(k5) k5.textContent=chua;
+}
+function buildDV(){
+  const dvs=[...new Set(RAW.flatMap(r=>(r.don_vi||'').split(/\n|\/|,/).map(s=>s.trim())).filter(Boolean))].sort();
+  const sel=document.getElementById('fdv');
+  if(sel) sel.innerHTML='<option value="">— Tất cả —</option>'+dvs.map(d=>`<option>${d}</option>`).join('');
+}
+function filterPL(v,field){
+  if(field==='ts'){const e=document.getElementById('fts');if(e) e.value=v;}
+  else{const e=document.getElementById('fpl');if(e) e.value=v;}
+  document.querySelectorAll('.kpi').forEach(k=>k.classList.remove('active'));
+  const idx={'SCADA/HMI':0,'Nhất thứ':1,'Nhị thứ':2,'Đường dây':3,'Kênh truyền':4,'Chưa khắc phục':5}[v];
+  if(idx!=null){const k=document.getElementById('kpi'+idx);if(k) k.classList.add('active');}
+  applyF();
+}
+function applyF(){
+  const pl=(document.getElementById('fpl')||{}).value||'';
+  const ts=(document.getElementById('fts')||{}).value||'';
+  const dv=(document.getElementById('fdv')||{}).value||'';
+  const s=((document.getElementById('fs')||{}).value||'').trim().toLowerCase();
+  FLT=RAW.filter(r=>{
+    if(pl&&r.phan_loai!==pl) return false;
+    if(ts&&r.trang_thai!==ts) return false;
+    if(dv&&!(r.don_vi||'').includes(dv)) return false;
+    if(s&&![(r.tram||''),(r.dien_bien||''),(r.tb_cha||''),(r.nguyen_nhan||'')].some(v=>v.toLowerCase().includes(s))) return false;
+    return true;
+  });
+  FLT.sort((a,b)=>{const va=a[sc]||'',vb=b[sc]||'';return sa?(va<vb?-1:va>vb?1:0):(va>vb?-1:va<vb?1:0);});
+  pg=1;
+  const rn=document.getElementById('rn');if(rn) rn.textContent=FLT.length;
+  render(); paginate();
+}
+function resetF(){
+  ['fpl','fts','fdv'].forEach(id=>{const e=document.getElementById(id);if(e) e.value='';});
+  const fs=document.getElementById('fs');if(fs) fs.value='';
+  document.querySelectorAll('.kpi').forEach(k=>k.classList.remove('active'));
+  applyF();
+}
+function srtBy(col){
+  if(sc===col) sa=!sa; else{sc=col;sa=false;}
+  document.querySelectorAll('thead th').forEach(t=>t.classList.remove('sorted'));
+  if(event?.target) event.target.classList.add('sorted');
+  applyF();
+}
+
+// ── RENDER ────────────────────────────────────────────────────
+function render(){
+  const tbl=document.getElementById('tbl');if(!tbl) return;
+  const page=FLT.slice((pg-1)*PS,pg*PS);
+  if(!page.length){tbl.innerHTML='<tr><td colspan="9"><div class="estate"><div class="ei">🔍</div>Không tìm thấy kết quả</div></td></tr>';return;}
+  tbl.innerHTML=page.map((r,i)=>{
+    const idx=(pg-1)*PS+i;
+    const ic=r.trang_thai==='Chưa khắc phục';
+    const tb=r.tb_cha||r.tb_con||'—';
+    const df=calcDiff(r.tg_xuat_hien,r.tg_khac_phuc);
+    return `<tr onclick="openM(${idx})">
+      <td class="mn" style="color:var(--muted);text-align:center">${r.stt||idx+1}</td>
+      <td><span class="badge ${plb(r.phan_loai)}">${esc(r.phan_loai||'?')}</span></td>
+      <td style="font-weight:600;white-space:nowrap;font-size:12px">${esc(r.tram||r.tb_cha||'—')}</td>
+      <td class="mn" style="font-size:10px;color:var(--muted)">${esc(tb.length>26?tb.slice(0,26)+'…':tb)}</td>
+      <td><div class="cclamp">${esc(r.dien_bien||'')}</div></td>
+      <td><div class="tcell"><div class="dt">${esc(r.tg_xuat_hien||'—')}</div></div></td>
+      <td><div class="tcell"><div class="dt">${esc(r.tg_khac_phuc||'—')}</div>${df?`<div class="df">${df}</div>`:''}</div></td>
+      <td><span class="tc ${ic?'chua':'da'}">${ic?'Chưa KP':'Đã KP'}</span></td>
+      <td class="mn" style="font-size:10px;color:var(--muted)">${esc(r.don_vi||'—')}</td>
+    </tr>`;
+  }).join('');
+}
+function plb(pl){return{'SCADA/HMI':'b1','Nhất thứ':'b2','Nhị thứ':'b3','Đường dây':'b4','Kênh truyền':'b5'}[pl]||'bx';}
+function calcDiff(t1,t2){
+  if(!t1||!t2) return '';
+  const p=s=>{const m=s.match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);return m?new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]):new Date(s);};
+  try{const ms=p(t2)-p(t1);if(ms<0||isNaN(ms)) return '';const h=Math.floor(ms/3600000),mn=Math.floor((ms%3600000)/60000);return h>0?`${h}h${mn}m`:`${mn}m`;}catch{return '';}
+}
+
+// ── PAGINATE ──────────────────────────────────────────────────
+function paginate(){
+  const tot=Math.ceil(FLT.length/PS);
+  const el=document.getElementById('pag');if(!el) return;
+  if(tot<=1){el.innerHTML='';return;}
+  let h=`<button onclick="gp(${pg-1})" ${pg===1?'disabled':''}>◀</button>`;
+  const rng=tot<=7?[...Array(tot)].map((_,i)=>i+1):pg<=4?[1,2,3,4,5,'…',tot]:pg>=tot-3?[1,'…',tot-4,tot-3,tot-2,tot-1,tot]:[1,'…',pg-1,pg,pg+1,'…',tot];
+  rng.forEach(p=>p==='…'?h+=`<button disabled>…</button>`:h+=`<button class="${p===pg?'active':''}" onclick="gp(${p})">${p}</button>`);
+  h+=`<button onclick="gp(${pg+1})" ${pg===tot?'disabled':''}>▶</button>`;
+  h+=`<span class="pg-inf">Trang ${pg}/${tot} | ${FLT.length} bản ghi</span>`;
+  el.innerHTML=h;
+}
+function gp(p){const t=Math.ceil(FLT.length/PS);if(p<1||p>t) return;pg=p;render();paginate();window.scrollTo({top:200,behavior:'smooth'});}
+
+// ── MODAL ─────────────────────────────────────────────────────
+function openM(idx){
+  mi=idx; const r=FLT[idx];if(!r) return;
+  const ic=r.trang_thai==='Chưa khắc phục';
+  const i=document.getElementById('mi');if(i){i.className='mhd-icon '+(ic?'c':'d');i.textContent=ic?'⚠':'✓';}
+  const t=document.getElementById('mt');if(t) t.textContent=(r.tram||r.tb_cha||'?')+(r.tb_cha&&r.tram?' – '+r.tb_cha:'');
+  const m=document.getElementById('mm');
+  if(m) m.innerHTML=`<span class="badge ${plb(r.phan_loai)}">${esc(r.phan_loai||'?')}</span><span class="tc ${ic?'chua':'da'}">${ic?'Chưa KP':'Đã KP'}</span><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">#${r.stt||idx+1}</span>`;
+  const mf=(l,v,mn=false)=>v!=null&&v!==''?`<div class="mf"><label>${l}</label><value style="${mn?'font-family:var(--mono);font-size:11px':''}">${esc(String(v))}</value></div>`:'';
+  const mt=(l,v,w=false)=>v?`<div class="mf full"><label style="${w?'color:var(--danger)':''}">${l}</label><div class="mtext" style="${w?'border-color:rgba(239,68,68,.3)':''}">${esc(v)}</div></div>`:'';
+  const b=document.getElementById('mb');
+  if(b) b.innerHTML=`<div class="mgrid">${mf('Trạm',r.tram||'—')}${mf('Đơn vị',r.don_vi||'—',true)}${mf('TB cha',r.tb_cha||'—',true)}${mf('TB con',r.tb_con||'—',true)}${mf('TG xuất hiện',r.tg_xuat_hien||'—',true)}${mf('TG khắc phục',r.tg_khac_phuc||(ic?'⚠ Chưa xử lý':'—'),true)}</div>${mt('Diễn biến sự cố',r.dien_bien)}${r.nguyen_nhan?`<div class="msep"></div>${mt('Nguyên nhân / Biện pháp',r.nguyen_nhan)}`:''}${r.ghi_chu?mt('Ghi chú / Kế hoạch',r.ghi_chu,ic):''}`;
+  const prev=document.getElementById('mprev'),next=document.getElementById('mnext');
+  if(prev) prev.disabled=idx===0;
+  if(next) next.disabled=idx===FLT.length-1;
+  const bg=document.getElementById('mbg');if(bg) bg.classList.add('open');
+}
+function navMod(d){if(mi+d>=0&&mi+d<FLT.length) openM(mi+d);}
+function closeMod(e){if(!e||e.target===document.getElementById('mbg')) document.getElementById('mbg')?.classList.remove('open');}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') closeMod();
+  if(document.getElementById('mbg')?.classList.contains('open')){if(e.key==='ArrowLeft') navMod(-1);if(e.key==='ArrowRight') navMod(1);}
+});
+
+// ── EXPORT ────────────────────────────────────────────────────
+function expCSV(){
+  const cs=['stt','phan_loai','tram','tb_cha','tb_con','dien_bien','tg_xuat_hien','tg_khac_phuc','nguyen_nhan','don_vi','trang_thai','ghi_chu'];
+  const hd=['STT','Phân loại','Trạm','TB cha','TB con','Diễn biến','TG xuất hiện','TG khắc phục','Nguyên nhân','ĐV xử lý','Trạng thái','Ghi chú'];
+  const rows=[hd,...FLT.map(r=>cs.map(c=>{const v=r[c]??'';const s=String(v).replace(/"/g,'""');return s.includes(',')||s.includes('\n')||s.includes('"')?`"${s}"`:s;}))];
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.join(',')).join('\n')],{type:'text/csv;charset=utf-8;'}));
+  a.download=`BatThuong_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── POSTMESSAGE TỪ PARENT ─────────────────────────────────────
+window.addEventListener('message',async e=>{
+  if(e.data?.type==='bt_connect'){
+    const{url,key}=e.data;
+    if(url&&key) await doConnect(url,key);
+  }
+});
+
+// ── KHỞI ĐỘNG ─────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{
+  if(window.parent!==window){document.body.classList.add('in-iframe');return;}
+  const u=localStorage.getItem('bt_url')||localStorage.getItem('tba_url');
+  const k=localStorage.getItem('bt_key')||localStorage.getItem('tba_key');
+  if(u&&k){
+    const ui=document.getElementById('iurl'),ki=document.getElementById('ikey');
+    if(ui) ui.value=u; if(ki) ki.value=k;
+    doConnect(u,k);
+  }
+});
+</script>
+</body>
+</html>
