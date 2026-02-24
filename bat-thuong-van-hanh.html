@@ -286,7 +286,7 @@ CREATE INDEX IF NOT EXISTS idx_bt_tg        ON bat_thuong(tg_xuat_hien DESC);</p
         <thead><tr>
           <th onclick="srtBy('stt')" style="width:38px">STT</th>
           <th onclick="srtBy('phan_loai')">Phân loại</th>
-          <th onclick="srtBy('tram')">Trạm</th>
+          <th onclick="srtBy('tram')">Trạm/Đường dây</th>
           <th onclick="srtBy('tb_cha')">Thiết bị</th>
           <th style="min-width:180px">Diễn biến</th>
           <th onclick="srtBy('tg_xuat_hien_sort')" style="white-space:nowrap">TG xuất hiện</th>
@@ -489,7 +489,7 @@ function openM(idx){
   const mf=(l,v,mn=false)=>v!=null&&v!==''?`<div class="mf"><label>${l}</label><value style="${mn?'font-family:var(--mono);font-size:11px':''}">${esc(String(v))}</value></div>`:'';
   const mt=(l,v,w=false)=>v?`<div class="mf full"><label style="${w?'color:var(--danger)':''}">${l}</label><div class="mtext" style="${w?'border-color:rgba(239,68,68,.3)':''}">${esc(v)}</div></div>`:'';
   const b=document.getElementById('mb');
-  if(b) b.innerHTML=`<div class="mgrid">${mf('Trạm',r.tram||'—')}${mf('Đơn vị',r.don_vi||'—',true)}${mf('TB cha',r.tb_cha||'—',true)}${mf('TB con',r.tb_con||'—',true)}${mf('TG xuất hiện',r.tg_xuat_hien||'—',true)}${mf('TG khắc phục',r.tg_khac_phuc||(ic?'⚠ Chưa xử lý':'—'),true)}</div>${mt('Diễn biến sự cố',r.dien_bien)}${r.nguyen_nhan?`<div class="msep"></div>${mt('Nguyên nhân / Biện pháp',r.nguyen_nhan)}`:''}${r.ghi_chu?mt('Ghi chú / Kế hoạch',r.ghi_chu,ic):''}`;
+  if(b) b.innerHTML=`<div class="mgrid">${mf('Trạm/Đường dây',r.tram||'—')}${mf('Đơn vị',r.don_vi||'—',true)}${mf('TB cha',r.tb_cha||'—',true)}${mf('TB con',r.tb_con||'—',true)}${mf('TG xuất hiện',r.tg_xuat_hien||'—',true)}${mf('TG khắc phục',r.tg_khac_phuc||(ic?'⚠ Chưa xử lý':'—'),true)}</div>${mt('Diễn biến sự cố',r.dien_bien)}${r.nguyen_nhan?`<div class="msep"></div>${mt('Nguyên nhân / Biện pháp',r.nguyen_nhan)}`:''}${r.ghi_chu?mt('Ghi chú / Kế hoạch',r.ghi_chu,ic):''}`;
   const prev=document.getElementById('mprev'),next=document.getElementById('mnext');
   if(prev) prev.disabled=idx===0;
   if(next) next.disabled=idx===FLT.length-1;
@@ -505,7 +505,7 @@ document.addEventListener('keydown',e=>{
 // ── EXPORT ────────────────────────────────────────────────────
 function expCSV(){
   const cs=['stt','phan_loai','tram','tb_cha','tb_con','dien_bien','tg_xuat_hien','tg_khac_phuc','nguyen_nhan','don_vi','trang_thai','ghi_chu'];
-  const hd=['STT','Phân loại','Trạm','TB cha','TB con','Diễn biến','TG xuất hiện','TG khắc phục','Nguyên nhân','ĐV xử lý','Trạng thái','Ghi chú'];
+  const hd=['STT','Phân loại','Trạm/Đường dây','TB cha','TB con','Diễn biến','TG xuất hiện','TG khắc phục','Nguyên nhân','ĐV xử lý','Trạng thái','Ghi chú'];
   const rows=[hd,...FLT.map(r=>cs.map(c=>{const v=r[c]??'';const s=String(v).replace(/"/g,'""');return s.includes(',')||s.includes('\n')||s.includes('"')?`"${s}"`:s;}))];
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.join(',')).join('\n')],{type:'text/csv;charset=utf-8;'}));
